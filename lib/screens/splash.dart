@@ -16,9 +16,9 @@ class Splash extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color.fromARGB(255, 255, 218, 72),
-                Color.fromARGB(255, 226, 58, 181),
-                Color(0xFF311B92),
+                  Color.fromARGB(255, 236, 239, 246),
+                Color.fromARGB(255, 72, 86, 244),
+                // Color(0xFF311B92),
               ],
             ),
           ),
