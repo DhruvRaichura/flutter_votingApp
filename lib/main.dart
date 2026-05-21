@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/splash.dart';
+import 'package:flutter_application_1/splash.dart';
 
 void main() {
-  runApp(const Splash());
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: SplashScreen(),
+  ));
 }
