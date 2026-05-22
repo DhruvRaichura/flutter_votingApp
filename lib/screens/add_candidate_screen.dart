@@ -4,7 +4,15 @@ import 'package:flutter_application_1/widgets/cities.dart';
 class AddCandidateScreen extends StatefulWidget {
   final String city;
   final int electionIndex;
-  const AddCandidateScreen({super.key, required this.city, required this.electionIndex});
+  final Future<void> Function(Map<String, dynamic> candidate) onAdd;
+
+  const AddCandidateScreen({
+    super.key,
+    required this.city,
+    required this.electionIndex,
+    required this.onAdd,
+  });
+
   @override
   State<AddCandidateScreen> createState() => _AddCandidateScreenState();
 }
@@ -22,7 +30,7 @@ class _AddCandidateScreenState extends State<AddCandidateScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final party = _partyCtrl.text.trim();
     final candidate = _candidateCtrl.text.trim();
     if (party.isEmpty || candidate.isEmpty) {
@@ -32,8 +40,7 @@ class _AddCandidateScreenState extends State<AddCandidateScreen> {
       ));
       return;
     }
-    final election = globalCityData[widget.city]![widget.electionIndex];
-    (election['candidates'] as List).add({
+    await widget.onAdd({
       'party': party,
       'candidate': candidate,
       'symbol': _symbolCtrl.text.trim().isEmpty ? '🗳️' : _symbolCtrl.text.trim(),
@@ -54,15 +61,16 @@ class _AddCandidateScreenState extends State<AddCandidateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final election = globalCityData[widget.city]![widget.electionIndex];
+    final election = globalCityData[widget.city]?[widget.electionIndex];
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Add Candidate', style: TextStyle(color: primaryBlue, fontSize: 18)),
-            Text('${widget.city} — ${election['name']}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            if (election != null)
+              Text('${widget.city} — ${election['name']}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
         backgroundColor: bgLight,

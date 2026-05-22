@@ -1,81 +1,74 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// Data structure:
+// ─── Colour tokens ────────────────────────────────────────────────────────────
+const Color bgLight      = Color(0xFFF8FAFC);
+const Color cardBg       = Colors.white;
+const Color primaryBlue  = Color(0xFF2563EB);
+const Color secondaryBlue = Color(0xFFDBEAFE);
+
+// ─── In-memory state ──────────────────────────────────────────────────────────
 // globalCityData[city] = list of elections
-// Each election: { 'name': String, 'candidates': List<Map> }
+// Each election : { 'name': String, 'candidates': List<Map> }
 // Each candidate: { 'party', 'candidate', 'symbol', 'votes' }
-
-final Map<String, List<Map<String, dynamic>>> globalCityData = {
-  'Vadodara': [
-    {
-      'name': 'State Level Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Dr. Hemang Joshi', 'votes': 0},
-        {'party': 'Congress', 'symbol': '✋', 'candidate': 'Padhiyar Jashpalsinh', 'votes': 0},
-      ],
-    },
-    {
-      'name': 'District Level Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Ravi Patel', 'votes': 0},
-        {'party': 'Congress', 'symbol': '✋', 'candidate': 'Suresh Modi', 'votes': 0},
-      ],
-    },
-  ],
-  'Surat': [
-    {
-      'name': 'State Level Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'CR Patil', 'votes': 0},
-        {'party': 'Congress', 'symbol': '✋', 'candidate': 'Darshana Jardosh', 'votes': 0},
-      ],
-    },
-    {
-      'name': 'Municipal Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Nitin Shah', 'votes': 0},
-        {'party': 'AAP', 'symbol': '🧹', 'candidate': 'Priya Desai', 'votes': 0},
-      ],
-    },
-  ],
-  'Ahmedabad': [
-    {
-      'name': 'State Level Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Amit Shah', 'votes': 0},
-        {'party': 'Congress', 'symbol': '✋', 'candidate': 'Hasmukh Patel', 'votes': 0},
-      ],
-    },
-    {
-      'name': 'District Level Election',
-      'candidates': [
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Kiran Mehta', 'votes': 0},
-        {'party': 'Congress', 'symbol': '✋', 'candidate': 'Anita Joshi', 'votes': 0},
-      ],
-    },
-    {
-      'name': 'Village Level Election',
-      'candidates': [
-        {'party': 'Independent', 'symbol': '⭐', 'candidate': 'Ramesh Bhai', 'votes': 0},
-        {'party': 'BJP', 'symbol': '🪷', 'candidate': 'Lata Ben', 'votes': 0},
-      ],
-    },
-  ],
-};
+Map<String, List<Map<String, dynamic>>> globalCityData = {};
 
 // votedElections[voterId] = set of "city_electionIndex" keys
-final Map<String, Set<String>> votedElections = {};
+Map<String, Set<String>> votedElections = {};
 
-// Check if voter has voted in a specific election
+// ─── Persistence keys ─────────────────────────────────────────────────────────
+const _kCityData    = 'city_data';
+const _kVotedData   = 'voted_data';
+
+// ─── Save ─────────────────────────────────────────────────────────────────────
+Future<void> saveAllData() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  // Encode globalCityData → JSON string
+  final cityJson = jsonEncode(
+    globalCityData.map((city, elections) =>
+        MapEntry(city, elections.map((e) => e).toList())),
+  );
+  await prefs.setString(_kCityData, cityJson);
+
+  // Encode votedElections: Map<String, List<String>>
+  final votedJson = jsonEncode(
+    votedElections.map((id, set) => MapEntry(id, set.toList())),
+  );
+  await prefs.setString(_kVotedData, votedJson);
+}
+
+// ─── Load ─────────────────────────────────────────────────────────────────────
+Future<void> loadAllData() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  // City data
+  final cityRaw = prefs.getString(_kCityData);
+  if (cityRaw != null) {
+    final decoded = jsonDecode(cityRaw) as Map<String, dynamic>;
+    globalCityData = decoded.map((city, elections) => MapEntry(
+          city,
+          (elections as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(),
+        ));
+  }
+
+  // Voted data
+  final votedRaw = prefs.getString(_kVotedData);
+  if (votedRaw != null) {
+    final decoded = jsonDecode(votedRaw) as Map<String, dynamic>;
+    votedElections = decoded.map((id, list) =>
+        MapEntry(id, Set<String>.from(list as List)));
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 bool hasVotedIn(String voterId, String city, int electionIndex) =>
     votedElections[voterId]?.contains('${city}_$electionIndex') ?? false;
 
-// Mark voter as voted in a specific election
-void markVoted(String voterId, String city, int electionIndex) {
+Future<void> markVoted(String voterId, String city, int electionIndex) async {
   votedElections.putIfAbsent(voterId, () => {}).add('${city}_$electionIndex');
+  await saveAllData();
 }
-
-const Color bgLight = Color(0xFFF8FAFC);
-const Color cardBg = Colors.white;
-const Color primaryBlue = Color(0xFF2563EB);
-const Color secondaryBlue = Color(0xFFDBEAFE);

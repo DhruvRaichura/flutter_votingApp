@@ -14,7 +14,6 @@ class _SplashScreenState extends State<SplashScreen> {
     // After 2 seconds, replace splash with LoginPage
     // pushReplacement means pressing back on LoginPage will exit the app, not return to splash
     Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginPage()),

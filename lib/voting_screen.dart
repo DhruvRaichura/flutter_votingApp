@@ -37,9 +37,12 @@ class _VotingScreenState extends State<VotingScreen> {
                 leading: Text(c['symbol'] ?? '🗳️', style: const TextStyle(fontSize: 24)),
                 title: Text(c['candidate'], style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(c['party']),
-                onTap: () {
+                onTap: () async {
+                  // Update vote count in memory
                   setState(() => c['votes'] = (c['votes'] ?? 0) + 1);
-                  markVoted(widget.voterId, widget.city, widget.electionIndex);
+                  // Persist vote + voted marker
+                  await markVoted(widget.voterId, widget.city, widget.electionIndex);
+                  await saveAllData();
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text('Vote cast for ${c['candidate']}!'),

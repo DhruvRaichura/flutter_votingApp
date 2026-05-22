@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/widgets/cities.dart';
 
 class AddElectionScreen extends StatefulWidget {
-  const AddElectionScreen({super.key});
+  final Future<void> Function(String city, Map<String, dynamic> election) onAdd;
+
+  const AddElectionScreen({super.key, required this.onAdd});
+
   @override
   State<AddElectionScreen> createState() => _AddElectionScreenState();
 }
@@ -22,7 +25,9 @@ class _AddElectionScreenState extends State<AddElectionScreen> {
   void dispose() {
     _cityCtrl.dispose();
     _electionNameCtrl.dispose();
-    for (var r in _rows) r.values.forEach((c) => c.dispose());
+    for (var r in _rows) {
+      r.values.forEach((c) => c.dispose());
+    }
     super.dispose();
   }
 
@@ -39,14 +44,16 @@ class _AddElectionScreenState extends State<AddElectionScreen> {
   void _snack(String msg) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.orange));
 
-  void _submit() {
+  Future<void> _submit() async {
     final city = _cityCtrl.text.trim();
     final name = _electionNameCtrl.text.trim();
     if (city.isEmpty) return _snack('Enter a city name');
     if (name.isEmpty) return _snack('Enter an election name');
 
-    final list = _rows
-        .where((r) => r['party']!.text.trim().isNotEmpty && r['candidate']!.text.trim().isNotEmpty)
+    final candidates = _rows
+        .where((r) =>
+            r['party']!.text.trim().isNotEmpty &&
+            r['candidate']!.text.trim().isNotEmpty)
         .map((r) => {
               'party': r['party']!.text.trim(),
               'candidate': r['candidate']!.text.trim(),
@@ -55,9 +62,9 @@ class _AddElectionScreenState extends State<AddElectionScreen> {
             })
         .toList();
 
-    if (list.isEmpty) return _snack('Add at least one candidate');
+    if (candidates.isEmpty) return _snack('Add at least one candidate');
 
-    globalCityData.putIfAbsent(city, () => []).add({'name': name, 'candidates': list});
+    await widget.onAdd(city, {'name': name, 'candidates': candidates});
     Navigator.pop(context, true);
   }
 
@@ -117,7 +124,8 @@ class _AddElectionScreenState extends State<AddElectionScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Candidate ${i + 1}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, color: primaryBlue)),
                           if (_rows.length > 1)
                             IconButton(
                               icon: const Icon(Icons.close, color: Colors.red, size: 20),

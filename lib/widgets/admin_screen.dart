@@ -5,6 +5,7 @@ import 'package:flutter_application_1/screens/add_candidate_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
+
   @override
   State<AdminScreen> createState() => _AdminScreenState();
 }
@@ -15,33 +16,54 @@ class _AdminScreenState extends State<AdminScreen> {
   void _snack(String msg, Color color) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
 
-  // ── Navigate to Add Election ─────────────────────────────────────────────
+  // Saves updated city list back to globalCityData, persists, and refreshes UI
+  Future<void> saveList(String city, List<Map<String, dynamic>> updatedList) async {
+    setState(() => globalCityData[city] = updatedList);
+    await saveAllData();
+  }
+
+  // ── Add Election ──────────────────────────────────────────────────────────
   Future<void> _goAddElection() async {
     final ok = await Navigator.push<bool>(
-        context, MaterialPageRoute(builder: (_) => const AddElectionScreen()));
-    if (ok == true) {
-      setState(() {});
-      _snack("Election added!", Colors.green);
-    }
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddElectionScreen(
+          onAdd: (city, election) async {
+            final updated = List<Map<String, dynamic>>.from(globalCityData[city] ?? [])
+              ..add(election);
+            await saveList(city, updated);
+          },
+        ),
+      ),
+    );
+    if (ok == true) _snack('Election added!', Colors.green);
   }
 
-  // ── Navigate to Add Candidate ────────────────────────────────────────────
+  // ── Add Candidate ─────────────────────────────────────────────────────────
   Future<void> _goAddCandidate(String city, int electionIdx) async {
     final ok = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-            builder: (_) =>
-                AddCandidateScreen(city: city, electionIndex: electionIdx)));
-    if (ok == true) {
-      setState(() {});
-      _snack("Candidate added!", Colors.green);
-    }
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddCandidateScreen(
+          city: city,
+          electionIndex: electionIdx,
+          onAdd: (candidate) async {
+            final elections = List<Map<String, dynamic>>.from(globalCityData[city]!);
+            final candidates = List<Map<String, dynamic>>.from(
+                elections[electionIdx]['candidates'])
+              ..add(candidate);
+            elections[electionIdx] = {...elections[electionIdx], 'candidates': candidates};
+            await saveList(city, elections);
+          },
+        ),
+      ),
+    );
+    if (ok == true) _snack('Candidate added!', Colors.green);
   }
 
-  // ── Edit Election Name ───────────────────────────────────────────────────
+  // ── Edit Election Name ────────────────────────────────────────────────────
   void _editElectionName(String city, int electionIdx) {
-    final election = globalCityData[city]![electionIdx];
-    final ctrl = TextEditingController(text: election['name']);
+    final ctrl = TextEditingController(text: globalCityData[city]![electionIdx]['name']);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -51,10 +73,11 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, foregroundColor: Colors.white),
-            onPressed: () {
+            onPressed: () async {
               final name = ctrl.text.trim();
               if (name.isEmpty) return;
-              setState(() => election['name'] = name);
+              setState(() => globalCityData[city]![electionIdx]['name'] = name);
+              await saveAllData();
               Navigator.pop(ctx);
               _snack('Election name updated', Colors.green);
             },
@@ -65,7 +88,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ── Edit Candidate ───────────────────────────────────────────────────────
+  // ── Edit Candidate ────────────────────────────────────────────────────────
   void _editCandidate(String city, int electionIdx, int candidateIdx) {
     final c = globalCityData[city]![electionIdx]['candidates'][candidateIdx];
     final pCtrl = TextEditingController(text: c['party']);
@@ -89,13 +112,19 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, foregroundColor: Colors.white),
-            onPressed: () {
+            onPressed: () async {
               if (nCtrl.text.trim().isEmpty || pCtrl.text.trim().isEmpty) return;
-              setState(() {
-                c['party'] = pCtrl.text.trim();
-                c['candidate'] = nCtrl.text.trim();
-                c['symbol'] = sCtrl.text.trim().isEmpty ? '🗳️' : sCtrl.text.trim();
-              });
+              final elections = List<Map<String, dynamic>>.from(globalCityData[city]!);
+              final candidates = List<Map<String, dynamic>>.from(
+                  elections[electionIdx]['candidates']);
+              candidates[candidateIdx] = {
+                ...c,
+                'party': pCtrl.text.trim(),
+                'candidate': nCtrl.text.trim(),
+                'symbol': sCtrl.text.trim().isEmpty ? '🗳️' : sCtrl.text.trim(),
+              };
+              elections[electionIdx] = {...elections[electionIdx], 'candidates': candidates};
+              await saveList(city, elections);
               Navigator.pop(ctx);
               _snack('Candidate updated', Colors.green);
             },
@@ -106,7 +135,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ── Delete Election ──────────────────────────────────────────────────────
+  // ── Delete Election ───────────────────────────────────────────────────────
   void _deleteElection(String city, int electionIdx) {
     showDialog(
       context: context,
@@ -117,8 +146,10 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              setState(() => globalCityData[city]!.removeAt(electionIdx));
+            onPressed: () async {
+              final elections = List<Map<String, dynamic>>.from(globalCityData[city]!)
+                ..removeAt(electionIdx);
+              await saveList(city, elections);
               Navigator.pop(ctx);
               _snack('Election deleted', Colors.red);
             },
@@ -129,14 +160,18 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  // ── Delete Candidate ─────────────────────────────────────────────────────
-  void _deleteCandidate(String city, int electionIdx, int candidateIdx) {
+  // ── Delete Candidate ──────────────────────────────────────────────────────
+  Future<void> _deleteCandidate(String city, int electionIdx, int candidateIdx) async {
     final candidates = globalCityData[city]![electionIdx]['candidates'] as List;
     if (candidates.length <= 1) {
       _snack('Need at least one candidate', Colors.orange);
       return;
     }
-    setState(() => candidates.removeAt(candidateIdx));
+    final elections = List<Map<String, dynamic>>.from(globalCityData[city]!);
+    final updated = List<Map<String, dynamic>>.from(elections[electionIdx]['candidates'])
+      ..removeAt(candidateIdx);
+    elections[electionIdx] = {...elections[electionIdx], 'candidates': updated};
+    await saveList(city, elections);
     _snack('Candidate removed', Colors.red);
   }
 
@@ -150,7 +185,7 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
       );
 
-  // ── Build ────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,49 +253,106 @@ class _AdminScreenState extends State<AdminScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.how_to_vote, color: primaryBlue),
-                  title: Text('$city — ${election['name']}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
-                  subtitle: Text('${candidates.length} candidates'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                // ── Election header row (responsive) ──────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  child: Row(
                     children: [
-                      IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
-                          tooltip: 'Edit election name',
-                          onPressed: () => _editElectionName(city, elIdx)),
-                      IconButton(
-                          icon: const Icon(Icons.person_add, color: primaryBlue, size: 20),
-                          tooltip: 'Add candidate',
-                          onPressed: () => _goAddCandidate(city, elIdx)),
-                      IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                          tooltip: 'Delete election',
-                          onPressed: () => _deleteElection(city, elIdx)),
+                      const Icon(Icons.how_to_vote, color: primaryBlue, size: 22),
+                      const SizedBox(width: 10),
+                      // Title + subtitle take all remaining space
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$city — ${election['name']}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryBlue,
+                                  fontSize: 14),
+                            ),
+                            Text(
+                              '${candidates.length} candidate${candidates.length == 1 ? '' : 's'}',
+                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Fixed-width action buttons — never steal space from title
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
+                              tooltip: 'Edit election name',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(6),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _editElectionName(city, elIdx)),
+                          IconButton(
+                              icon: const Icon(Icons.person_add, color: primaryBlue, size: 20),
+                              tooltip: 'Add candidate',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(6),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _goAddCandidate(city, elIdx)),
+                          IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                              tooltip: 'Delete election',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(6),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _deleteElection(city, elIdx)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
                 const Divider(height: 1),
+                // ── Candidate rows (responsive) ───────────────────────────
                 for (int ci = 0; ci < candidates.length; ci++)
-                  ListTile(
-                    leading: Text(candidates[ci]['symbol'] ?? '🗳️',
-                        style: const TextStyle(fontSize: 22)),
-                    title: Text(candidates[ci]['candidate'],
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(candidates[ci]['party']),
-                    dense: true,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+                    child: Row(
                       children: [
-                        IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.orange, size: 18),
-                            tooltip: 'Edit candidate',
-                            onPressed: () => _editCandidate(city, elIdx, ci)),
-                        IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red, size: 18),
-                            tooltip: 'Remove candidate',
-                            onPressed: () => _deleteCandidate(city, elIdx, ci)),
+                        Text(candidates[ci]['symbol'] ?? '🗳️',
+                            style: const TextStyle(fontSize: 22)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(candidates[ci]['candidate'],
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text(candidates[ci]['party'],
+                                  style: const TextStyle(
+                                      color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                                icon: const Icon(Icons.edit,
+                                    color: Colors.orange, size: 18),
+                                tooltip: 'Edit candidate',
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.all(6),
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _editCandidate(city, elIdx, ci)),
+                            IconButton(
+                                icon: const Icon(Icons.close,
+                                    color: Colors.red, size: 18),
+                                tooltip: 'Remove candidate',
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.all(6),
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _deleteCandidate(city, elIdx, ci)),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -299,11 +391,10 @@ class _AdminScreenState extends State<AdminScreen> {
                       Expanded(
                         child: Text('$city — ${election['name']}',
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: primaryBlue,
-                                fontSize: 14)),
+                                fontWeight: FontWeight.bold, color: primaryBlue, fontSize: 14)),
                       ),
-                      Text('Total: $total', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      Text('Total: $total',
+                          style: const TextStyle(color: Colors.grey, fontSize: 12)),
                     ],
                   ),
                   const Divider(),
@@ -318,7 +409,8 @@ class _AdminScreenState extends State<AdminScreen> {
                           children: [
                             Row(children: [
                               Text(c['candidate'],
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600, fontSize: 13)),
                               if ((c['votes'] as int? ?? 0) == maxV && maxV > 0)
                                 const Text(' 👑', style: TextStyle(fontSize: 13)),
                             ]),
